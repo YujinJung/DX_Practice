@@ -473,7 +473,10 @@ void BoxApp::BuildPSO()
 		mpsByteCode->GetBufferSize()
 	};
 
-	psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+	CD3DX12_RASTERIZER_DESC wireframeRasterizer(D3D12_DEFAULT);
+	wireframeRasterizer.FillMode = D3D12_FILL_MODE_WIREFRAME;
+	psoDesc.RasterizerState = wireframeRasterizer;
+
 	psoDesc.BlendState = CD3DX12_BLEND_DESC(D3D12_DEFAULT);
 	psoDesc.DepthStencilState = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
 	psoDesc.SampleMask = UINT_MAX;
