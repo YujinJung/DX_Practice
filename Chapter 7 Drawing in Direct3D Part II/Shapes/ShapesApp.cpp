@@ -77,6 +77,7 @@ private:
 	void BuildShadersAndInputLayout();
 	void BuildShapeGeometry();
 	void BuildSkull();
+	void BuildCar();
 	void BuildPSOs();
 	void BuildFrameResources();
 	void BuildRenderItems();
@@ -172,6 +173,7 @@ bool ShapesApp::Initialize()
 	BuildShadersAndInputLayout();
 	BuildShapeGeometry();
 	BuildSkull();
+	BuildCar();
 	BuildRenderItems();
 	BuildFrameResources();
 	BuildDescriptorHeaps();
@@ -543,7 +545,7 @@ void ShapesApp::BuildShadersAndInputLayout()
 	{
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 		{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-	{"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 28, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+		{"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 28, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
 	};
 }
 
@@ -671,9 +673,78 @@ void ShapesApp::BuildShapeGeometry()
 	mGeometries[geo->Name] = std::move(geo);
 }
 
+void ShapesApp::BuildCar()
+{
+	std::ifstream carText("Model/car.txt");
+
+	if (!carText)
+	{
+		MessageBox(0, L"car.txt not found", 0, 0);
+		return;
+	}
+
+	UINT vCount = 0;
+	UINT tCount = 0;
+	std::string ignore;
+
+	carText >> ignore >> vCount;
+	carText >> ignore >> tCount;
+	carText >> ignore >> ignore >> ignore >> ignore;
+
+	std::vector<Vertex> vertices(vCount);
+	for (UINT i = 0; i < vCount; ++i)
+	{
+		carText >> vertices[i].Pos.x >> vertices[i].Pos.y >> vertices[i].Pos.z;
+		carText >> vertices[i].Color.x >> vertices[i].Color.y >> vertices[i].Color.z;
+
+		vertices[i].Color.w = 0.0f;
+		if (i == vCount - 3)
+			continue;
+	}
+
+	carText >> ignore >> ignore >> ignore;
+
+	std::vector<std::int32_t> indices(3 * tCount);
+	for (UINT i = 0; i < tCount; ++i)
+	{
+		carText >> indices[3 * i] >> indices[3 * i + 1] >> indices[3 * i + 2];
+	}
+
+	carText.close();
+
+	const UINT vbByteSize = (UINT)vertices.size() * sizeof(Vertex);
+	const UINT ibByteSize = (UINT)indices.size() * sizeof(std::int32_t);
+
+	auto geo = std::make_unique<MeshGeometry>();
+	geo->Name = "carGeo";
+
+	ThrowIfFailed(D3DCreateBlob(vbByteSize, &geo->VertexBufferCPU));
+	CopyMemory(geo->VertexBufferCPU->GetBufferPointer(), vertices.data(), vbByteSize);
+
+	ThrowIfFailed(D3DCreateBlob(ibByteSize, &geo->IndexBufferCPU));
+	CopyMemory(geo->IndexBufferCPU->GetBufferPointer(), indices.data(), ibByteSize);
+
+	geo->VertexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(), mCommandList.Get(), vertices.data(), vbByteSize, geo->VertexBufferUploader);
+	geo->IndexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(), mCommandList.Get(), indices.data(), ibByteSize, geo->IndexBufferUploader);
+
+	geo->VertexByteStride = sizeof(Vertex);
+	geo->VertexBufferByteSize = vbByteSize;
+	geo->IndexFormat = DXGI_FORMAT_R32_UINT;
+	geo->IndexBufferByteSize = ibByteSize;
+
+	SubmeshGeometry carSubmesh;
+	carSubmesh.IndexCount = (UINT)indices.size();
+	carSubmesh.StartIndexLocation = 0;
+	carSubmesh.BaseVertexLocation = 0;
+
+	geo->DrawArgs["car"] = carSubmesh;
+
+	mGeometries[geo->Name] = std::move(geo);
+}
+
 void ShapesApp::BuildSkull()
 {
-	std::ifstream skullText("../Model/skull.txt");
+	std::ifstream skullText("Model/skull.txt");
 
 	if (!skullText)
 	{
@@ -809,7 +880,7 @@ void ShapesApp::BuildRenderItems()
 	boxRitem->StartIndexLocation = boxRitem->Geo->DrawArgs["box"].StartIndexLocation;
 	boxRitem->BaseVertexLocation = boxRitem->Geo->DrawArgs["box"].BaseVertexLocation;
 	mAllRitems.push_back(std::move(boxRitem));
-
+	
 	auto gridRitem = std::make_unique<RenderItem>();
 	gridRitem->World = MathHelper::Identity4x4();
 	gridRitem->ObjCBIndex = 1;
@@ -820,10 +891,21 @@ void ShapesApp::BuildRenderItems()
 	gridRitem->BaseVertexLocation = gridRitem->Geo->DrawArgs["grid"].BaseVertexLocation;
 	mAllRitems.push_back(std::move(gridRitem));
 
+	auto carRitem = std::make_unique<RenderItem>();
+	XMStoreFloat4x4(&carRitem->World, XMMatrixTranslation(3.0f, 5.0f, 12.0f));
+	//carRitem->World = MathHelper::Identity4x4();
+	carRitem->ObjCBIndex = 2;
+	carRitem->Geo = mGeometries["carGeo"].get();
+	carRitem->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+	carRitem->IndexCount = carRitem->Geo->DrawArgs["car"].IndexCount;
+	carRitem->StartIndexLocation = carRitem->Geo->DrawArgs["car"].StartIndexLocation;
+	carRitem->BaseVertexLocation = carRitem->Geo->DrawArgs["car"].BaseVertexLocation;
+	mAllRitems.push_back(std::move(carRitem));
+
 	auto skullRitem = std::make_unique<RenderItem>();
-	XMStoreFloat4x4(&skullRitem->World, XMMatrixTranslation(1.0f, 2.0f, 0.5f));
+	XMStoreFloat4x4(&skullRitem->World, XMMatrixTranslation(0.0f, 2.0f, 0.0f));
 	//skullRitem->World = MathHelper::Identity4x4();
-	skullRitem->ObjCBIndex = 2;
+	skullRitem->ObjCBIndex = 3;
 	skullRitem->Geo = mGeometries["skullGeo"].get();
 	skullRitem->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 	skullRitem->IndexCount = skullRitem->Geo->DrawArgs["skull"].IndexCount;
@@ -831,7 +913,7 @@ void ShapesApp::BuildRenderItems()
 	skullRitem->BaseVertexLocation = skullRitem->Geo->DrawArgs["skull"].BaseVertexLocation;
 	mAllRitems.push_back(std::move(skullRitem));
 
-	UINT objCBIndex = 3;
+	UINT objCBIndex = 4;
 	for (int i = 0; i < 5; ++i)
 	{
 		// 기둥들과 구들을 두 줄로 배치
