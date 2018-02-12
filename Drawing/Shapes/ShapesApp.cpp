@@ -68,7 +68,7 @@ private:
 	virtual void OnMouseMove(WPARAM btnState, int x, int y)override;
 
 	void OnKeyboardInput(const GameTimer& gt);
-    XMVECTOR MatrixLEFTRIGHT(FXMVECTOR EyeDirection, FXMVECTOR up);
+	XMVECTOR MatrixLEFTRIGHT(FXMVECTOR EyeDirection, FXMVECTOR up);
 	void UpdateCamera(const GameTimer& gt);
 	void UpdateObjectCBs(const GameTimer& gt);
 	void UpdateMainPassCB(const GameTimer& gt);
@@ -378,7 +378,7 @@ void ShapesApp::OnKeyboardInput(const GameTimer& gt)
 		mIsWireframe = true;
 	else
 		mIsWireframe = false;
-	
+
 	// Build the view matrix.
 	XMVECTOR pos = XMVectorSet(mEyeOffset.x, mEyeOffset.y, mEyeOffset.z, 1.0f);
 	XMVECTOR target = XMVectorSet(mTarget.x, mTarget.y, mTarget.z, 0.0f);
@@ -422,7 +422,7 @@ XMVECTOR ShapesApp::MatrixLEFTRIGHT(FXMVECTOR EyeDirection, FXMVECTOR up)
 {
 	XMVECTOR R0 = XMVector3Cross(up, EyeDirection);
 	R0 = XMVector3Normalize(R0);
-	
+
 	return R0;
 }
 
@@ -534,10 +534,13 @@ void ShapesApp::BuildDescriptorHeaps()
 
 	// Need a CBV descriptor for each object for each frame resource,
 	// +1 for the perPass CBV for each frame resource.
+	// +matCount for the Materials for each frame resources.
 	UINT numDescriptors = (objCount + 1 + matCount) * gNumFrameResources;
 
 	// Save an offset to the start of the pass CBVs.  These are the last 3 descriptors.
 	mPassCbvOffset = objCount * gNumFrameResources;
+	// mPassCbvOffset + (passSize)
+	// passSize = 1 * gNumFrameResources
 	mMatCbvOffset = mPassCbvOffset + gNumFrameResources;
 
 	D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc;
@@ -615,7 +618,7 @@ void ShapesApp::BuildConstantBufferViews()
 			cbAddress += i * materialCBByteSize;
 
 			// Offset to the object cbv in the descriptor heap.
-			int heapIndex = mMatCbvOffset + frameIndex* materialCount + i;
+			int heapIndex = mMatCbvOffset + frameIndex * materialCount + i;
 			auto handle = CD3DX12_CPU_DESCRIPTOR_HANDLE(mCbvHeap->GetCPUDescriptorHandleForHeapStart());
 			handle.Offset(heapIndex, mCbvSrvUavDescriptorSize);
 
@@ -643,6 +646,7 @@ void ShapesApp::BuildRootSignature()
 	cbvTable2.Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 2);
 
 	// Root parameter can be a table, root descriptor or root constants.
+	// Objects, Materials, Passes
 	CD3DX12_ROOT_PARAMETER slotRootParameter[3];
 
 	// Create root CBVs.
@@ -1075,7 +1079,7 @@ void ShapesApp::BuildRenderItems()
 	boxRitem->StartIndexLocation = boxRitem->Geo->DrawArgs["box"].StartIndexLocation;
 	boxRitem->BaseVertexLocation = boxRitem->Geo->DrawArgs["box"].BaseVertexLocation;
 	mAllRitems.push_back(std::move(boxRitem));
-	
+
 	auto gridRitem = std::make_unique<RenderItem>();
 	gridRitem->World = MathHelper::Identity4x4();
 	gridRitem->ObjCBIndex = objCBIndex++;
@@ -1208,7 +1212,7 @@ void ShapesApp::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const std::v
 		auto cbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
 		cbvHandle.Offset(cbvIndex, mCbvSrvUavDescriptorSize);
 
-		UINT matCbvIndex = mMatCbvOffset + mCurrFrameResourceIndex*(UINT)mMaterials.size() + ri->Mat->MatCBIndex;
+		UINT matCbvIndex = mMatCbvOffset + mCurrFrameResourceIndex * (UINT)mMaterials.size() + ri->Mat->MatCBIndex;
 		auto matCbvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(mCbvHeap->GetGPUDescriptorHandleForHeapStart());
 		matCbvHandle.Offset(matCbvIndex, mCbvSrvUavDescriptorSize);
 
