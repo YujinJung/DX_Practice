@@ -120,10 +120,10 @@ private:
 	XMFLOAT4X4 mProj = MathHelper::Identity4x4();
 
 	float mTheta = 1.5f*XM_PI;
-	float mPhi = 0.2f*XM_PI;
+	float mPhi = XM_PIDIV4;
 	float mRadius = 15.0f;
 	float mCTheta = 0.0f;
-	float mCPhi = 0.0f;
+	float mCPhi = mPhi + XM_PI;
 
 	POINT mLastMousePos;
 };
@@ -353,7 +353,7 @@ void ShapesApp::OnMouseMove(WPARAM btnState, int x, int y)
 		// Update angles based on input to orbit camera around box.
 		mCTheta += dx;
 		mCPhi += dy;
-		mPhi = MathHelper::Clamp(mPhi, 0.1f, MathHelper::Pi - 0.1f);
+		mCPhi = MathHelper::Clamp(mCPhi, 0.1f, MathHelper::Pi - 0.1f);
 
 		mTarget.x = mRadius * sinf(mCTheta);
 		mTarget.z = mRadius * cosf(mCTheta);
