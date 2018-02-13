@@ -1,8 +1,8 @@
 ﻿  ShapesApp.cpp
 c:\users\yujin\dev\dx_practice\drawing\shapes\shapesapp.cpp(410): warning C4305: '인수': 'double'에서 'float'(으)로 잘립니다.
 c:\users\yujin\dev\dx_practice\drawing\shapes\shapesapp.cpp(411): warning C4305: '인수': 'double'에서 'float'(으)로 잘립니다.
-c:\users\yujin\dev\dx_practice\drawing\shapes\shapesapp.cpp(418): warning C4305: '인수': 'double'에서 'float'(으)로 잘립니다.
-c:\users\yujin\dev\dx_practice\drawing\shapes\shapesapp.cpp(419): warning C4305: '인수': 'double'에서 'float'(으)로 잘립니다.
-c:\users\yujin\dev\dx_practice\drawing\shapes\shapesapp.cpp(972): warning C4305: '인수': 'double'에서 'float'(으)로 잘립니다.
-c:\users\yujin\dev\dx_practice\drawing\shapes\shapesapp.cpp(980): warning C4305: '인수': 'double'에서 'float'(으)로 잘립니다.
+c:\users\yujin\dev\dx_practice\drawing\shapes\shapesapp.cpp(423): warning C4305: '인수': 'double'에서 'float'(으)로 잘립니다.
+c:\users\yujin\dev\dx_practice\drawing\shapes\shapesapp.cpp(424): warning C4305: '인수': 'double'에서 'float'(으)로 잘립니다.
+c:\users\yujin\dev\dx_practice\drawing\shapes\shapesapp.cpp(982): warning C4305: '인수': 'double'에서 'float'(으)로 잘립니다.
+c:\users\yujin\dev\dx_practice\drawing\shapes\shapesapp.cpp(990): warning C4305: '인수': 'double'에서 'float'(으)로 잘립니다.
   Shapes.vcxproj -> C:\Users\Yujin\Dev\DX_Practice\Drawing\Shapes\x64\Debug\Shapes.exe

@@ -126,10 +126,10 @@ private:
 	 * mouse left click - EyeTarget Move
 	 * mouse right click - EyeTarget, playerTarget(x, z)(Yaw) Move
 	*/
-	XMFLOAT3 mPlayerPos = { 0.0f, 0.0f, 0.0f };
-	XMFLOAT3 mEyePos = { 0.0f, 6.0f, 0.0f };
-	XMFLOAT3 mPlayerTarget = { 0.0f, 6.0f, 15.0f };
-	XMFLOAT3 mEyeTarget = { 0.0f, 6.0f, 15.0f };
+	XMFLOAT3 mPlayerPos = { 0.0f, 3.0f, 0.0f };
+	XMFLOAT3 mEyePos = { 0.0f, 30.0f, -30.0f };
+	XMFLOAT3 mPlayerTarget = { 0.0f, 3.0f, 15.0f };
+	XMFLOAT3 mEyeTarget = mPlayerPos;
 	XMFLOAT4X4 mView = MathHelper::Identity4x4();
 	XMFLOAT4X4 mProj = MathHelper::Identity4x4();
 
@@ -377,8 +377,8 @@ void ShapesApp::OnMouseMove(WPARAM btnState, int x, int y)
 		mEyeTarget.z = mEyePos.z + mRadius * sinf(mCPhi) * cosf(mCTheta);
 		mEyeTarget.y = mEyePos.y + mRadius * cosf(mCPhi);
 
-		mPlayerTarget.x = mEyePos.x + mRadius * sinf(mCPhi) * sinf(mCTheta);
-		mPlayerTarget.z = mEyePos.z + mRadius * sinf(mCPhi) * cosf(mCTheta);
+		mPlayerTarget.x = mPlayerPos.x + mRadius * sinf(mCPhi) * sinf(mCTheta);
+		mPlayerTarget.z = mPlayerPos.z + mRadius * sinf(mCPhi) * cosf(mCTheta);
 		// only change the mouse right button
 		mYaw = mCTheta;
 	}
@@ -395,31 +395,41 @@ void ShapesApp::OnKeyboardInput(const GameTimer& gt)
 		mIsWireframe = false;
 
 	// Build the view matrix.
-	XMVECTOR pos = XMVectorSet(mEyePos.x, mEyePos.y, mEyePos.z, 1.0f);
-	XMVECTOR player = XMVectorSet(mPlayerPos.x, mPlayerPos.y, mPlayerPos.z, 1.0f);
+	XMVECTOR eyePos = XMVectorSet(mEyePos.x, mEyePos.y, mEyePos.z, 1.0f);
+	XMVECTOR playerPos = XMVectorSet(mPlayerPos.x, mPlayerPos.y, mPlayerPos.z, 1.0f);
 	XMVECTOR eyeTarget = XMVectorSet(mEyeTarget.x, mEyeTarget.y, mEyeTarget.z, 0.0f);
 	XMVECTOR playerTarget = XMVectorSet(mPlayerTarget.x, mPlayerTarget.y, mPlayerTarget.z, 0.0f);
 	XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
 
-	XMVECTOR EyeDirection = XMVector3Normalize(XMVectorSubtract(playerTarget, player));
-	XMVECTOR unitLEFTRIGHT = MatrixLEFTRIGHT(EyeDirection, up);
-	XMVECTOR EyePosCalc = XMVectorSet(mRadius * 2 * sinf(XM_PIDIV4), mRadius * 2 * cosf(XM_PIDIV4), mRadius * 2 * sinf(XM_PIDIV4), 1.0f);
+	static XMVECTOR EyePosCalc = XMVectorSet(mRadius * 2 * sinf(XM_PIDIV4), mRadius * 2 * cosf(XM_PIDIV4), mRadius * 2 * sinf(XM_PIDIV4), 1.0f);
+	XMVECTOR PlayerDirection = XMVector3Normalize(XMVectorSubtract(playerTarget, playerPos));
+	XMVECTOR unitLEFTRIGHT = MatrixLEFTRIGHT(PlayerDirection, up);
 
 	if (GetAsyncKeyState('w') || GetAsyncKeyState('W'))
 	{
-		pos = XMVectorAdd(pos, 0.001*EyeDirection);
-		player = XMVectorAdd(player, 0.001*EyeDirection);
-		XMStoreFloat3(&mEyePos, pos);
-		XMStoreFloat3(&mEyeTarget, player);
-		XMStoreFloat3(&mPlayerPos, player);
+		playerPos = XMVectorAdd(playerPos, 0.001*PlayerDirection);
+		playerTarget = XMVectorAdd(playerTarget, 0.001*PlayerDirection);
+
+		XMVECTOR EyePos = XMVectorSet(sinf(mYaw + XM_PI), 1.0f, cosf(mYaw + XM_PI), 1.0f);
+		eyePos = XMVectorMultiplyAdd(EyePosCalc, EyePos, playerPos);
+
+		XMStoreFloat3(&mEyePos, eyePos);
+		XMStoreFloat3(&mEyeTarget, playerPos);
+		XMStoreFloat3(&mPlayerPos, playerPos);
+		XMStoreFloat3(&mPlayerTarget, playerTarget);
 	}
 	else if (GetAsyncKeyState('s') || GetAsyncKeyState('S'))
 	{
-		pos = XMVectorSubtract(pos, 0.001*EyeDirection);
-		player = XMVectorSubtract(player, 0.001*EyeDirection);
-		XMStoreFloat3(&mEyePos, pos);
-		XMStoreFloat3(&mEyeTarget, player);
-		XMStoreFloat3(&mPlayerPos, player);
+		playerPos = XMVectorSubtract(playerPos, 0.001*PlayerDirection);
+		playerTarget = XMVectorSubtract(playerTarget, 0.001*PlayerDirection);
+
+		XMVECTOR EyePos = XMVectorSet(sinf(mYaw + XM_PI), 1.0f, cosf(mYaw + XM_PI), 1.0f);
+		eyePos = XMVectorMultiplyAdd(EyePosCalc, EyePos, playerPos);
+
+		XMStoreFloat3(&mEyePos, eyePos);
+		XMStoreFloat3(&mEyeTarget, playerPos);
+		XMStoreFloat3(&mPlayerPos, playerPos);
+		XMStoreFloat3(&mPlayerTarget, playerTarget);
 	}
 
 	if (GetAsyncKeyState('a') || GetAsyncKeyState('A'))
@@ -430,13 +440,13 @@ void ShapesApp::OnKeyboardInput(const GameTimer& gt)
 			mCTheta += XM_2PI;
 
 		XMVECTOR EyePos = XMVectorSet(sinf(mYaw + XM_PI), 1.0f, cosf(mYaw + XM_PI), 1.0f);
-		pos = XMVectorMultiplyAdd(EyePosCalc, EyePos, player);
-		XMStoreFloat3(&mEyePos, pos);
+		eyePos = XMVectorMultiplyAdd(EyePosCalc, EyePos, playerPos);
+		XMStoreFloat3(&mEyePos, eyePos);
 
 		mPlayerTarget.x = mPlayerPos.x + mRadius * sinf(mCPhi) * sinf(mYaw);
 		mPlayerTarget.z = mPlayerPos.z + mRadius * sinf(mCPhi) * cosf(mYaw);
 
-		XMStoreFloat3(&mEyeTarget, player);
+		XMStoreFloat3(&mEyeTarget, playerPos);
 
 		mCTheta = mYaw;
 	}
@@ -448,13 +458,13 @@ void ShapesApp::OnKeyboardInput(const GameTimer& gt)
 			mCTheta -= XM_2PI;
 
 		XMVECTOR EyePos = XMVectorSet(sinf(mYaw + XM_PI), 1.0f, cosf(mYaw + XM_PI), 1.0f);
-		pos = XMVectorMultiplyAdd(EyePosCalc, EyePos, player);
-		XMStoreFloat3(&mEyePos, pos);
+		eyePos = XMVectorMultiplyAdd(EyePosCalc, EyePos, playerPos);
+		XMStoreFloat3(&mEyePos, eyePos);
 
 		mPlayerTarget.x = mPlayerPos.x + mRadius * sinf(mCPhi) * sinf(mYaw);
 		mPlayerTarget.z = mPlayerPos.z + mRadius * sinf(mCPhi) * cosf(mYaw);
 
-		XMStoreFloat3(&mEyeTarget, player);
+		XMStoreFloat3(&mEyeTarget, playerPos);
 
 		mCTheta = mYaw;
 	}
