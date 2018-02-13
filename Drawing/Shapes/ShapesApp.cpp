@@ -118,9 +118,18 @@ private:
 
 	bool mIsWireframe = false;
 
-	XMFLOAT3 mEyeOffset = { 0.0f, 0.0f, 0.0f };
-	XMFLOAT3 mEyePos = { 0.0f, 0.0f, 0.0f };
-	XMFLOAT3 mTarget = { 0.0f, 0.0f, 0.0f };
+	/*
+	 * EyePos - EyeTarget
+	 * player - playerTarget
+	 * a d - playerTarget Move(Yaw)
+	 * w s - playerTarget, EyePos Move // EyeDirection based on playerTarget
+	 * mouse left click - EyeTarget Move
+	 * mouse right click - EyeTarget, playerTarget(x, z)(Yaw) Move
+	*/
+	XMFLOAT3 mPlayerPos = { 0.0f, 0.0f, 0.0f };
+	XMFLOAT3 mEyePos = { 0.0f, 6.0f, 0.0f };
+	XMFLOAT3 mPlayerTarget = { 0.0f, 6.0f, 15.0f };
+	XMFLOAT3 mEyeTarget = { 0.0f, 6.0f, 15.0f };
 	XMFLOAT4X4 mView = MathHelper::Identity4x4();
 	XMFLOAT4X4 mProj = MathHelper::Identity4x4();
 
@@ -128,7 +137,8 @@ private:
 	float mPhi = XM_PIDIV4;
 	float mRadius = 15.0f;
 	float mCTheta = 0.0f;
-	float mCPhi = mPhi + XM_PI;
+	float mCPhi = XM_PIDIV2;
+	float mYaw = 0.0f;
 
 	POINT mLastMousePos;
 };
@@ -330,29 +340,6 @@ void ShapesApp::OnMouseMove(WPARAM btnState, int x, int y)
 
 	if ((btnState & MK_LBUTTON) != 0)
 	{
-		// Make each pixel correspond to a quarter of a degree.
-		dx = XMConvertToRadians(0.25f*static_cast<float>(x - mLastMousePos.x));
-		dy = XMConvertToRadians(0.25f*static_cast<float>(y - mLastMousePos.y));
-
-		// Update angles based on input to orbit camera around box.
-		mTheta += dx;
-		mPhi += dy;
-
-		// Restrict the angle mPhi.
-		mPhi = MathHelper::Clamp(mPhi, 0.1f, MathHelper::Pi - 0.1f);
-	}
-	else if ((btnState & MK_RBUTTON) != 0)
-	{
-
-		//// Make each pixel correspond to 0.2 unit in the scene.
-		//float dx = 0.05f*static_cast<float>(x - mLastMousePos.x);
-		//float dy = 0.05f*static_cast<float>(y - mLastMousePos.y);
-
-		//// Update the camera radius based on input.
-		//mRadius += dx - dy;
-
-		//// Restrict the radius.
-		//mRadius = MathHelper::Clamp(mRadius, 5.0f, 150.0f);
 
 		dx = XMConvertToRadians(0.5f*static_cast<float>(x - mLastMousePos.x));
 		dy = XMConvertToRadians(0.5f*static_cast<float>(y - mLastMousePos.y));
@@ -362,11 +349,39 @@ void ShapesApp::OnMouseMove(WPARAM btnState, int x, int y)
 		mCPhi += dy;
 		mCPhi = MathHelper::Clamp(mCPhi, 0.1f, MathHelper::Pi - 0.1f);
 
-		mTarget.x = mRadius * sinf(mCTheta);
-		mTarget.z = mRadius * cosf(mCTheta);
-		mTarget.y = mRadius * cosf(mCPhi);
-	}
+		if (mCTheta > XM_2PI)
+			mCTheta -= XM_2PI;
+		else if (mCTheta < 0.0f)
+			mCTheta += XM_2PI;
 
+		mEyeTarget.x = mEyePos.x + mRadius * sinf(mCTheta);
+		mEyeTarget.z = mEyePos.z + mRadius * cosf(mCTheta);
+		mEyeTarget.y = mEyePos.y + mRadius * cosf(mCPhi);
+	}
+	else if ((btnState & MK_RBUTTON) != 0)
+	{
+		dx = XMConvertToRadians(0.5f*static_cast<float>(x - mLastMousePos.x));
+		dy = XMConvertToRadians(0.5f*static_cast<float>(y - mLastMousePos.y));
+
+		// Update angles based on input to orbit camera around box.
+		mCTheta += dx;
+		mCPhi += dy;
+		mCPhi = MathHelper::Clamp(mCPhi, 0.1f, MathHelper::Pi - 0.1f);
+
+		if (mCTheta > XM_2PI)
+			mCTheta -= XM_2PI;
+		else if (mCTheta < 0.0f)
+			mCTheta += XM_2PI;
+
+		mEyeTarget.x = mEyePos.x + mRadius * sinf(mCPhi) * sinf(mCTheta);
+		mEyeTarget.z = mEyePos.z + mRadius * sinf(mCPhi) * cosf(mCTheta);
+		mEyeTarget.y = mEyePos.y + mRadius * cosf(mCPhi);
+
+		mPlayerTarget.x = mEyePos.x + mRadius * sinf(mCPhi) * sinf(mCTheta);
+		mPlayerTarget.z = mEyePos.z + mRadius * sinf(mCPhi) * cosf(mCTheta);
+		// only change the mouse right button
+		mYaw = mCTheta;
+	}
 	mLastMousePos.x = x;
 	mLastMousePos.y = y;
 }
@@ -380,41 +395,68 @@ void ShapesApp::OnKeyboardInput(const GameTimer& gt)
 		mIsWireframe = false;
 
 	// Build the view matrix.
-	XMVECTOR pos = XMVectorSet(mEyeOffset.x, mEyeOffset.y, mEyeOffset.z, 1.0f);
-	XMVECTOR target = XMVectorSet(mTarget.x, mTarget.y, mTarget.z, 0.0f);
+	XMVECTOR pos = XMVectorSet(mEyePos.x, mEyePos.y, mEyePos.z, 1.0f);
+	XMVECTOR player = XMVectorSet(mPlayerPos.x, mPlayerPos.y, mPlayerPos.z, 1.0f);
+	XMVECTOR eyeTarget = XMVectorSet(mEyeTarget.x, mEyeTarget.y, mEyeTarget.z, 0.0f);
+	XMVECTOR playerTarget = XMVectorSet(mPlayerTarget.x, mPlayerTarget.y, mPlayerTarget.z, 0.0f);
 	XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
 
-	XMVECTOR EyeDirection = XMVector3Normalize(XMVectorSubtract(target, pos));
+	XMVECTOR EyeDirection = XMVector3Normalize(XMVectorSubtract(playerTarget, player));
 	XMVECTOR unitLEFTRIGHT = MatrixLEFTRIGHT(EyeDirection, up);
+	XMVECTOR EyePosCalc = XMVectorSet(mRadius * 2 * sinf(XM_PIDIV4), mRadius * 2 * cosf(XM_PIDIV4), mRadius * 2 * sinf(XM_PIDIV4), 1.0f);
 
 	if (GetAsyncKeyState('w') || GetAsyncKeyState('W'))
 	{
 		pos = XMVectorAdd(pos, 0.001*EyeDirection);
-		target = XMVectorAdd(target, 0.001*EyeDirection);
-		XMStoreFloat3(&mEyeOffset, pos);
-		XMStoreFloat3(&mTarget, target);
+		player = XMVectorAdd(player, 0.001*EyeDirection);
+		XMStoreFloat3(&mEyePos, pos);
+		XMStoreFloat3(&mEyeTarget, player);
+		XMStoreFloat3(&mPlayerPos, player);
 	}
 	else if (GetAsyncKeyState('s') || GetAsyncKeyState('S'))
 	{
 		pos = XMVectorSubtract(pos, 0.001*EyeDirection);
-		target = XMVectorSubtract(target, 0.001*EyeDirection);
-		XMStoreFloat3(&mEyeOffset, pos);
-		XMStoreFloat3(&mTarget, target);
+		player = XMVectorSubtract(player, 0.001*EyeDirection);
+		XMStoreFloat3(&mEyePos, pos);
+		XMStoreFloat3(&mEyeTarget, player);
+		XMStoreFloat3(&mPlayerPos, player);
 	}
 
 	if (GetAsyncKeyState('a') || GetAsyncKeyState('A'))
 	{
-		pos = XMVectorSubtract(pos, 0.001*unitLEFTRIGHT);
-		target = XMVectorSubtract(target, 0.001*unitLEFTRIGHT);
-		XMStoreFloat3(&mEyeOffset, pos);
-		XMStoreFloat3(&mTarget, target);
+		mYaw -= 0.0001f;
+
+		if (mCTheta < 0.0f)
+			mCTheta += XM_2PI;
+
+		XMVECTOR EyePos = XMVectorSet(sinf(mYaw + XM_PI), 1.0f, cosf(mYaw + XM_PI), 1.0f);
+		pos = XMVectorMultiplyAdd(EyePosCalc, EyePos, player);
+		XMStoreFloat3(&mEyePos, pos);
+
+		mPlayerTarget.x = mPlayerPos.x + mRadius * sinf(mCPhi) * sinf(mYaw);
+		mPlayerTarget.z = mPlayerPos.z + mRadius * sinf(mCPhi) * cosf(mYaw);
+
+		XMStoreFloat3(&mEyeTarget, player);
+
+		mCTheta = mYaw;
 	}
 	else if (GetAsyncKeyState('d') || GetAsyncKeyState('D'))
 	{
-		pos = XMVectorAdd(pos, 0.001*unitLEFTRIGHT);
-		target = XMVectorAdd(target, 0.001*unitLEFTRIGHT);
-		XMStoreFloat3(&mEyeOffset, pos);
-		XMStoreFloat3(&mTarget, target);
+		mYaw += 0.0001f;
+
+		if (mCTheta > XM_2PI)
+			mCTheta -= XM_2PI;
+
+		XMVECTOR EyePos = XMVectorSet(sinf(mYaw + XM_PI), 1.0f, cosf(mYaw + XM_PI), 1.0f);
+		pos = XMVectorMultiplyAdd(EyePosCalc, EyePos, player);
+		XMStoreFloat3(&mEyePos, pos);
+
+		mPlayerTarget.x = mPlayerPos.x + mRadius * sinf(mCPhi) * sinf(mYaw);
+		mPlayerTarget.z = mPlayerPos.z + mRadius * sinf(mCPhi) * cosf(mYaw);
+
+		XMStoreFloat3(&mEyeTarget, player);
+
+		mCTheta = mYaw;
 	}
 }
 
@@ -430,19 +472,16 @@ XMVECTOR ShapesApp::MatrixLEFTRIGHT(FXMVECTOR EyeDirection, FXMVECTOR up)
 void ShapesApp::UpdateCamera(const GameTimer& gt)
 {
 	// Convert Spherical to Cartesian coordinates.
-	mEyePos.x = mEyeOffset.x + mRadius * sinf(mPhi)*cosf(mTheta);
-	mEyePos.z = mEyeOffset.z + mRadius * sinf(mPhi)*sinf(mTheta);
-	mEyePos.y = mEyeOffset.y + mRadius * cosf(mPhi);
 
 	// Build the view matrix.
 	XMVECTOR pos = XMVectorSet(mEyePos.x, mEyePos.y, mEyePos.z, 1.0f);
-	//XMVECTOR target = XMVectorZero();
-	XMVECTOR target = XMVectorSet(mTarget.x, mTarget.y, mTarget.z, 0.0f);
+	XMVECTOR target = XMVectorSet(mEyeTarget.x, mEyeTarget.y, mEyeTarget.z, 0.0f);
 	XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
 
 	XMMATRIX view = XMMatrixLookAtLH(pos, target, up);
 	XMStoreFloat4x4(&mView, view);
 }
+
 
 //-------------------------------------------------------------------------------------------------------------------------------
 void ShapesApp::UpdateObjectCBs(const GameTimer& gt)
@@ -450,13 +489,27 @@ void ShapesApp::UpdateObjectCBs(const GameTimer& gt)
 	auto currObjectCB = mCurrFrameResource->ObjectCB.get();
 	for (auto& e : mAllRitems)
 	{
+		XMMATRIX world = XMLoadFloat4x4(&e->World);
+		if (e->ObjCBIndex == 0)
+		{
+			world = XMMatrixScaling(1.0f, 1.0f, 1.0f) * XMMatrixRotationRollPitchYaw(0.0f, mYaw + XM_PI, 0.0f) * XMMatrixTranslation(mPlayerPos.x, mPlayerPos.y, mPlayerPos.z);
+		}
+		// Show the PlayerTarget Box
+		else if (e->ObjCBIndex == 1)
+			world = XMMatrixTranslation(mPlayerTarget.x, mPlayerTarget.y, mPlayerTarget.z);
+		// Show the EyeTarget Box
+		else if(e->ObjCBIndex == 2)
+			world = XMMatrixTranslation(mEyeTarget.x, mEyeTarget.y, mEyeTarget.z);
+
+		ObjectConstants objConstants;
+		XMStoreFloat4x4(&objConstants.World, XMMatrixTranspose(world));
+
+		currObjectCB->CopyData(e->ObjCBIndex, objConstants);
+
 		// Only update the cbuffer data if the constants have changed.  
 		// This needs to be tracked per frame resource.
 		if (e->NumFramesDirty > 0)
 		{
-			XMMATRIX world = XMLoadFloat4x4(&e->World);
-
-			ObjectConstants objConstants;
 			XMStoreFloat4x4(&objConstants.World, XMMatrixTranspose(world));
 
 			currObjectCB->CopyData(e->ObjCBIndex, objConstants);
@@ -1069,30 +1122,8 @@ void ShapesApp::BuildRenderItems()
 {
 	UINT objCBIndex = 0;
 
-	auto boxRitem = std::make_unique<RenderItem>();
-	XMStoreFloat4x4(&boxRitem->World, XMMatrixScaling(2.0f, 2.0f, 2.0f)*XMMatrixTranslation(0.0f, 1.0f, 0.0f));
-	boxRitem->ObjCBIndex = objCBIndex++;
-	boxRitem->Geo = mGeometries["shapeGeo"].get();
-	boxRitem->Mat = mMaterials["stone0"].get();
-	boxRitem->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-	boxRitem->IndexCount = boxRitem->Geo->DrawArgs["box"].IndexCount;
-	boxRitem->StartIndexLocation = boxRitem->Geo->DrawArgs["box"].StartIndexLocation;
-	boxRitem->BaseVertexLocation = boxRitem->Geo->DrawArgs["box"].BaseVertexLocation;
-	mAllRitems.push_back(std::move(boxRitem));
-
-	auto gridRitem = std::make_unique<RenderItem>();
-	gridRitem->World = MathHelper::Identity4x4();
-	gridRitem->ObjCBIndex = objCBIndex++;
-	gridRitem->Geo = mGeometries["shapeGeo"].get();
-	gridRitem->Mat = mMaterials["tile0"].get();
-	gridRitem->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-	gridRitem->IndexCount = gridRitem->Geo->DrawArgs["grid"].IndexCount;
-	gridRitem->StartIndexLocation = gridRitem->Geo->DrawArgs["grid"].StartIndexLocation;
-	gridRitem->BaseVertexLocation = gridRitem->Geo->DrawArgs["grid"].BaseVertexLocation;
-	mAllRitems.push_back(std::move(gridRitem));
-
 	auto carRitem = std::make_unique<RenderItem>();
-	XMStoreFloat4x4(&carRitem->World, XMMatrixTranslation(3.0f, 5.0f, 12.0f));
+	XMStoreFloat4x4(&carRitem->World, XMMatrixTranslation(-25.0f, 2.0f, 5.0f));
 	//carRitem->World = MathHelper::Identity4x4();
 	carRitem->ObjCBIndex = objCBIndex++;
 	carRitem->Geo = mGeometries["carGeo"].get();
@@ -1102,6 +1133,40 @@ void ShapesApp::BuildRenderItems()
 	carRitem->StartIndexLocation = carRitem->Geo->DrawArgs["car"].StartIndexLocation;
 	carRitem->BaseVertexLocation = carRitem->Geo->DrawArgs["car"].BaseVertexLocation;
 	mAllRitems.push_back(std::move(carRitem));
+
+	auto boxRitem = std::make_unique<RenderItem>();
+	XMStoreFloat4x4(&boxRitem->World, XMMatrixScaling(2.0f, 2.0f, 2.0f)*XMMatrixTranslation(0.0f, 6.0f, -3.0f));
+	boxRitem->ObjCBIndex = objCBIndex++;
+	boxRitem->Geo = mGeometries["shapeGeo"].get();
+	boxRitem->Mat = mMaterials["stone0"].get();
+	boxRitem->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+	boxRitem->IndexCount = boxRitem->Geo->DrawArgs["box"].IndexCount;
+	boxRitem->StartIndexLocation = boxRitem->Geo->DrawArgs["box"].StartIndexLocation;
+	boxRitem->BaseVertexLocation = boxRitem->Geo->DrawArgs["box"].BaseVertexLocation;
+	mAllRitems.push_back(std::move(boxRitem));
+	
+	auto boxRitem2 = std::make_unique<RenderItem>();
+	XMStoreFloat4x4(&boxRitem2->World, XMMatrixScaling(1.0f, 2.0f, 1.0f)*XMMatrixTranslation(0.0f, 6.0f, -3.0f));
+	boxRitem2->ObjCBIndex = objCBIndex++;
+	boxRitem2->Geo = mGeometries["shapeGeo"].get();
+	boxRitem2->Mat = mMaterials["stone0"].get();
+	boxRitem2->Mat->DiffuseAlbedo = XMFLOAT4(Colors::Red);
+	boxRitem2->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+	boxRitem2->IndexCount = boxRitem2->Geo->DrawArgs["box"].IndexCount;
+	boxRitem2->StartIndexLocation = boxRitem2->Geo->DrawArgs["box"].StartIndexLocation;
+	boxRitem2->BaseVertexLocation = boxRitem2->Geo->DrawArgs["box"].BaseVertexLocation;
+	mAllRitems.push_back(std::move(boxRitem2));
+
+	auto gridRitem = std::make_unique<RenderItem>();
+	XMStoreFloat4x4(&gridRitem->World, XMMatrixScaling(10.0f, 10.0f, 10.0f));
+	gridRitem->ObjCBIndex = objCBIndex++;
+	gridRitem->Geo = mGeometries["shapeGeo"].get();
+	gridRitem->Mat = mMaterials["tile0"].get();
+	gridRitem->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+	gridRitem->IndexCount = gridRitem->Geo->DrawArgs["grid"].IndexCount;
+	gridRitem->StartIndexLocation = gridRitem->Geo->DrawArgs["grid"].StartIndexLocation;
+	gridRitem->BaseVertexLocation = gridRitem->Geo->DrawArgs["grid"].BaseVertexLocation;
+	mAllRitems.push_back(std::move(gridRitem));
 
 	auto skullRitem = std::make_unique<RenderItem>();
 	XMStoreFloat4x4(&skullRitem->World, XMMatrixTranslation(0.0f, 2.0f, 5.0f));
