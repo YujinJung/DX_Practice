@@ -126,19 +126,18 @@ private:
 	 * mouse left click - EyeTarget Move
 	 * mouse right click - EyeTarget, playerTarget(x, z)(Yaw) Move
 	*/
+	float mRadius = 15.0f;
+	float mYaw = 0.0f;
+	float mCamPhi = XM_PIDIV2;
+	float mCamTheta;
+
 	XMFLOAT3 mPlayerPos = { 0.0f, 3.0f, 0.0f };
 	XMFLOAT3 mEyePos = { 0.0f, 30.0f, -30.0f };
 	XMFLOAT3 mPlayerTarget = { 0.0f, 3.0f, 15.0f };
 	XMFLOAT3 mEyeTarget = mPlayerPos;
 	XMFLOAT4X4 mView = MathHelper::Identity4x4();
 	XMFLOAT4X4 mProj = MathHelper::Identity4x4();
-
-	float mTheta = 1.5f*XM_PI;
-	float mPhi = XM_PIDIV4;
-	float mRadius = 15.0f;
-	float mCTheta = 0.0f;
-	float mCPhi = XM_PIDIV2;
-	float mYaw = 0.0f;
+	XMFLOAT3 mEyePosCalc = { mRadius * 2 * sinf(XM_PIDIV4), mRadius * 2 * cosf(XM_PIDIV4), mRadius * 2 * sinf(XM_PIDIV4) };
 
 	POINT mLastMousePos;
 };
@@ -335,52 +334,56 @@ void ShapesApp::OnMouseUp(WPARAM btnState, int x, int y)
 //-------------------------------------------------------------------------------------------------------------------------------
 void ShapesApp::OnMouseMove(WPARAM btnState, int x, int y)
 {
-	float dx;
-	float dy;
+	XMVECTOR eyePos = XMVectorSet(mEyePos.x, mEyePos.y, mEyePos.z, 1.0f);
+	XMVECTOR eyeTarget = XMVectorSet(mEyeTarget.x, mEyeTarget.y, mEyeTarget.z, 0.0f);
+
+	float dx, dy;
 
 	if ((btnState & MK_LBUTTON) != 0)
 	{
-
 		dx = XMConvertToRadians(0.5f*static_cast<float>(x - mLastMousePos.x));
 		dy = XMConvertToRadians(0.5f*static_cast<float>(y - mLastMousePos.y));
 
 		// Update angles based on input to orbit camera around box.
-		mCTheta += dx;
-		mCPhi += dy;
-		mCPhi = MathHelper::Clamp(mCPhi, 0.1f, MathHelper::Pi - 0.1f);
+		mCamTheta += dx;
+		mCamPhi += dy;
+		mCamPhi = MathHelper::Clamp(mCamPhi, 0.1f, MathHelper::Pi - 0.1f);
 
-		if (mCTheta > XM_2PI)
-			mCTheta -= XM_2PI;
-		else if (mCTheta < 0.0f)
-			mCTheta += XM_2PI;
-
-		mEyeTarget.x = mEyePos.x + mRadius * sinf(mCTheta);
-		mEyeTarget.z = mEyePos.z + mRadius * cosf(mCTheta);
-		mEyeTarget.y = mEyePos.y + mRadius * cosf(mCPhi);
+		mEyeTarget.x = mEyePos.x + mRadius * sinf(mCamPhi) * sinf(mYaw + mCamTheta);
+		mEyeTarget.z = mEyePos.z + mRadius * sinf(mCamPhi) * cosf(mYaw + mCamTheta);
+		mEyeTarget.y = mEyePos.y + mRadius * cosf(mCamPhi);
 	}
 	else if ((btnState & MK_RBUTTON) != 0)
 	{
+		XMVECTOR EyePosCalc = XMVectorSet(mEyePosCalc.x, mEyePosCalc.y, mEyePosCalc.z, 1.0f);
+		XMVECTOR playerPos = XMVectorSet(mPlayerPos.x, mPlayerPos.y, mPlayerPos.z, 1.0f);
+		mCamTheta = 0.0f;
+
 		dx = XMConvertToRadians(0.5f*static_cast<float>(x - mLastMousePos.x));
 		dy = XMConvertToRadians(0.5f*static_cast<float>(y - mLastMousePos.y));
 
 		// Update angles based on input to orbit camera around box.
-		mCTheta += dx;
-		mCPhi += dy;
-		mCPhi = MathHelper::Clamp(mCPhi, 0.1f, MathHelper::Pi - 0.1f);
+		mYaw += dx;
+		mCamPhi += dy;
+		mCamPhi = MathHelper::Clamp(mCamPhi, 0.1f, MathHelper::Pi - 0.1f);
 
-		if (mCTheta > XM_2PI)
-			mCTheta -= XM_2PI;
-		else if (mCTheta < 0.0f)
-			mCTheta += XM_2PI;
+		if (mYaw > XM_2PI)
+			mYaw -= XM_2PI;
+		else if (mYaw < 0.0f)
+			mYaw += XM_2PI;
 
-		mEyeTarget.x = mEyePos.x + mRadius * sinf(mCPhi) * sinf(mCTheta);
-		mEyeTarget.z = mEyePos.z + mRadius * sinf(mCPhi) * cosf(mCTheta);
-		mEyeTarget.y = mEyePos.y + mRadius * cosf(mCPhi);
+		XMVECTOR EyePos = XMVectorSet(sinf(mYaw + XM_PI), 1.0f, cosf(mYaw + XM_PI), 1.0f);
+		eyePos = XMVectorMultiplyAdd(EyePosCalc, EyePos, playerPos);
+		XMStoreFloat3(&mEyePos, eyePos);
 
-		mPlayerTarget.x = mPlayerPos.x + mRadius * sinf(mCPhi) * sinf(mCTheta);
-		mPlayerTarget.z = mPlayerPos.z + mRadius * sinf(mCPhi) * cosf(mCTheta);
-		// only change the mouse right button
-		mYaw = mCTheta;
+		mEyeTarget.x = mEyePos.x + mRadius * sinf(mCamPhi) * sinf(mYaw);
+		mEyeTarget.z = mEyePos.z + mRadius * sinf(mCamPhi) * cosf(mYaw);
+		mEyeTarget.y = mEyePos.y + mRadius * cosf(mCamPhi);
+
+		mPlayerTarget.x = mPlayerPos.x + mRadius * sinf(mCamPhi) * sinf(mYaw);
+		mPlayerTarget.z = mPlayerPos.z + mRadius * sinf(mCamPhi) * cosf(mYaw);
+
+		XMStoreFloat3(&mEyeTarget, playerPos);
 	}
 	mLastMousePos.x = x;
 	mLastMousePos.y = y;
@@ -397,16 +400,14 @@ void ShapesApp::OnKeyboardInput(const GameTimer& gt)
 	// Build the view matrix.
 	XMVECTOR eyePos = XMVectorSet(mEyePos.x, mEyePos.y, mEyePos.z, 1.0f);
 	XMVECTOR playerPos = XMVectorSet(mPlayerPos.x, mPlayerPos.y, mPlayerPos.z, 1.0f);
-	XMVECTOR eyeTarget = XMVectorSet(mEyeTarget.x, mEyeTarget.y, mEyeTarget.z, 0.0f);
 	XMVECTOR playerTarget = XMVectorSet(mPlayerTarget.x, mPlayerTarget.y, mPlayerTarget.z, 0.0f);
-	XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+	XMVECTOR EyePosCalc = XMVectorSet(mEyePosCalc.x, mEyePosCalc.y, mEyePosCalc.z, 1.0f);
 
-	static XMVECTOR EyePosCalc = XMVectorSet(mRadius * 2 * sinf(XM_PIDIV4), mRadius * 2 * cosf(XM_PIDIV4), mRadius * 2 * sinf(XM_PIDIV4), 1.0f);
 	XMVECTOR PlayerDirection = XMVector3Normalize(XMVectorSubtract(playerTarget, playerPos));
-	XMVECTOR unitLEFTRIGHT = MatrixLEFTRIGHT(PlayerDirection, up);
 
 	if (GetAsyncKeyState('w') || GetAsyncKeyState('W'))
 	{
+		mCamTheta = 0.0f;
 		playerPos = XMVectorAdd(playerPos, 0.001*PlayerDirection);
 		playerTarget = XMVectorAdd(playerTarget, 0.001*PlayerDirection);
 
@@ -420,6 +421,7 @@ void ShapesApp::OnKeyboardInput(const GameTimer& gt)
 	}
 	else if (GetAsyncKeyState('s') || GetAsyncKeyState('S'))
 	{
+		mCamTheta = 0.0f;
 		playerPos = XMVectorSubtract(playerPos, 0.001*PlayerDirection);
 		playerTarget = XMVectorSubtract(playerTarget, 0.001*PlayerDirection);
 
@@ -434,39 +436,31 @@ void ShapesApp::OnKeyboardInput(const GameTimer& gt)
 
 	if (GetAsyncKeyState('a') || GetAsyncKeyState('A'))
 	{
+		mCamTheta = 0.0f;
 		mYaw -= 0.0001f;
-
-		if (mCTheta < 0.0f)
-			mCTheta += XM_2PI;
 
 		XMVECTOR EyePos = XMVectorSet(sinf(mYaw + XM_PI), 1.0f, cosf(mYaw + XM_PI), 1.0f);
 		eyePos = XMVectorMultiplyAdd(EyePosCalc, EyePos, playerPos);
 		XMStoreFloat3(&mEyePos, eyePos);
 
-		mPlayerTarget.x = mPlayerPos.x + mRadius * sinf(mCPhi) * sinf(mYaw);
-		mPlayerTarget.z = mPlayerPos.z + mRadius * sinf(mCPhi) * cosf(mYaw);
+		mPlayerTarget.x = mPlayerPos.x + mRadius * sinf(mCamPhi) * sinf(mYaw);
+		mPlayerTarget.z = mPlayerPos.z + mRadius * sinf(mCamPhi) * cosf(mYaw);
 
 		XMStoreFloat3(&mEyeTarget, playerPos);
-
-		mCTheta = mYaw;
 	}
 	else if (GetAsyncKeyState('d') || GetAsyncKeyState('D'))
 	{
+		mCamTheta = 0.0f;
 		mYaw += 0.0001f;
-
-		if (mCTheta > XM_2PI)
-			mCTheta -= XM_2PI;
 
 		XMVECTOR EyePos = XMVectorSet(sinf(mYaw + XM_PI), 1.0f, cosf(mYaw + XM_PI), 1.0f);
 		eyePos = XMVectorMultiplyAdd(EyePosCalc, EyePos, playerPos);
 		XMStoreFloat3(&mEyePos, eyePos);
 
-		mPlayerTarget.x = mPlayerPos.x + mRadius * sinf(mCPhi) * sinf(mYaw);
-		mPlayerTarget.z = mPlayerPos.z + mRadius * sinf(mCPhi) * cosf(mYaw);
+		mPlayerTarget.x = mPlayerPos.x + mRadius * sinf(mCamPhi) * sinf(mYaw);
+		mPlayerTarget.z = mPlayerPos.z + mRadius * sinf(mCamPhi) * cosf(mYaw);
 
 		XMStoreFloat3(&mEyeTarget, playerPos);
-
-		mCTheta = mYaw;
 	}
 }
 
@@ -508,7 +502,7 @@ void ShapesApp::UpdateObjectCBs(const GameTimer& gt)
 		else if (e->ObjCBIndex == 1)
 			world = XMMatrixTranslation(mPlayerTarget.x, mPlayerTarget.y, mPlayerTarget.z);
 		// Show the EyeTarget Box
-		else if(e->ObjCBIndex == 2)
+		else if (e->ObjCBIndex == 2)
 			world = XMMatrixTranslation(mEyeTarget.x, mEyeTarget.y, mEyeTarget.z);
 
 		ObjectConstants objConstants;
@@ -1154,7 +1148,7 @@ void ShapesApp::BuildRenderItems()
 	boxRitem->StartIndexLocation = boxRitem->Geo->DrawArgs["box"].StartIndexLocation;
 	boxRitem->BaseVertexLocation = boxRitem->Geo->DrawArgs["box"].BaseVertexLocation;
 	mAllRitems.push_back(std::move(boxRitem));
-	
+
 	auto boxRitem2 = std::make_unique<RenderItem>();
 	XMStoreFloat4x4(&boxRitem2->World, XMMatrixScaling(1.0f, 2.0f, 1.0f)*XMMatrixTranslation(0.0f, 6.0f, -3.0f));
 	boxRitem2->ObjCBIndex = objCBIndex++;
