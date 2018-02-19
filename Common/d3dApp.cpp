@@ -428,7 +428,6 @@ bool D3DApp::InitMainWindow()
 	return true;
 }
 
-// InitDirect3D
 // Direct3D를 초기화한다
 bool D3DApp::InitDirect3D()
 {
@@ -491,7 +490,7 @@ bool D3DApp::InitDirect3D()
 
 	CreateCommandObjects();
     CreateSwapChain();
-    CreateRtvAndDsvDescriptorHeaps();
+	CreateRtvAndDsvDescriptorHeaps();
 
 	return true;
 }

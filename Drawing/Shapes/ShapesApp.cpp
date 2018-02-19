@@ -46,6 +46,9 @@ struct RenderItem
 	UINT IndexCount = 0;
 	UINT StartIndexLocation = 0;
 	int BaseVertexLocation = 0;
+
+	XMFLOAT3 originVector = { 0.0f, 0.0f, 0.0f };
+	float radius = 0.0f;
 };
 
 class ShapesApp : public D3DApp
@@ -389,6 +392,16 @@ void ShapesApp::OnMouseMove(WPARAM btnState, int x, int y)
 	mLastMousePos.y = y;
 }
 
+float distance(const FXMVECTOR& v1, const FXMVECTOR& v2)
+{
+	XMVECTOR vectorSub = XMVectorSubtract(v1, v2);
+	XMVECTOR length = XMVector3Length(vectorSub);
+
+	float distance = 0.0f;
+	XMStoreFloat(&distance, length);
+	return distance;
+}
+
 //-------------------------------------------------------------------------------------------------------------------------------
 void ShapesApp::OnKeyboardInput(const GameTimer& gt)
 {
@@ -402,36 +415,70 @@ void ShapesApp::OnKeyboardInput(const GameTimer& gt)
 	XMVECTOR playerPos = XMVectorSet(mPlayerPos.x, mPlayerPos.y, mPlayerPos.z, 1.0f);
 	XMVECTOR playerTarget = XMVectorSet(mPlayerTarget.x, mPlayerTarget.y, mPlayerTarget.z, 0.0f);
 	XMVECTOR EyePosCalc = XMVectorSet(mEyePosCalc.x, mEyePosCalc.y, mEyePosCalc.z, 1.0f);
-
 	XMVECTOR PlayerDirection = XMVector3Normalize(XMVectorSubtract(playerTarget, playerPos));
+
+	XMFLOAT3& obstaclePos = mAllRitems[4]->originVector;
+	XMVECTOR obstacleVector = XMVectorSet(obstaclePos.x, obstaclePos.y, obstaclePos.z, 1.0f);
+	float plusRadius = mAllRitems[0]->radius + mAllRitems[4]->radius;
+	float betweenLength = 0.0f;
 
 	if (GetAsyncKeyState('w') || GetAsyncKeyState('W'))
 	{
 		mCamTheta = 0.0f;
+
+		XMVECTOR prePlayerPos = playerPos;
+		XMVECTOR prePlayerTarget = playerTarget;
+		XMVECTOR preEyePos = eyePos;
+
 		playerPos = XMVectorAdd(playerPos, 0.001*PlayerDirection);
 		playerTarget = XMVectorAdd(playerTarget, 0.001*PlayerDirection);
 
-		XMVECTOR EyePos = XMVectorSet(sinf(mYaw + XM_PI), 1.0f, cosf(mYaw + XM_PI), 1.0f);
-		eyePos = XMVectorMultiplyAdd(EyePosCalc, EyePos, playerPos);
+		XMVECTOR EyePosOne = XMVectorSet(sinf(mYaw + XM_PI), 1.0f, cosf(mYaw + XM_PI), 1.0f);
+		eyePos = XMVectorMultiplyAdd(EyePosCalc, EyePosOne, playerPos);
 
-		XMStoreFloat3(&mEyePos, eyePos);
-		XMStoreFloat3(&mEyeTarget, playerPos);
-		XMStoreFloat3(&mPlayerPos, playerPos);
-		XMStoreFloat3(&mPlayerTarget, playerTarget);
+		float betweenLength = distance(playerPos, obstacleVector);
+		if (plusRadius < betweenLength)
+		{
+			XMStoreFloat3(&mEyePos, eyePos);
+			XMStoreFloat3(&mEyeTarget, playerPos);
+			XMStoreFloat3(&mPlayerPos, playerPos);
+			XMStoreFloat3(&mPlayerTarget, playerTarget);
+		}
+		else if (plusRadius >= betweenLength)
+		{
+			playerPos = prePlayerPos;
+			playerTarget = prePlayerTarget;
+			eyePos = preEyePos;
+		}
 	}
 	else if (GetAsyncKeyState('s') || GetAsyncKeyState('S'))
 	{
 		mCamTheta = 0.0f;
+
+		XMVECTOR prePlayerPos = playerPos;
+		XMVECTOR prePlayerTarget = playerTarget;
+		XMVECTOR preEyePos = eyePos;
+
 		playerPos = XMVectorSubtract(playerPos, 0.001*PlayerDirection);
 		playerTarget = XMVectorSubtract(playerTarget, 0.001*PlayerDirection);
 
-		XMVECTOR EyePos = XMVectorSet(sinf(mYaw + XM_PI), 1.0f, cosf(mYaw + XM_PI), 1.0f);
-		eyePos = XMVectorMultiplyAdd(EyePosCalc, EyePos, playerPos);
+		XMVECTOR EyePosOne = XMVectorSet(sinf(mYaw + XM_PI), 1.0f, cosf(mYaw + XM_PI), 1.0f);
+		eyePos = XMVectorMultiplyAdd(EyePosCalc, EyePosOne, playerPos);
 
-		XMStoreFloat3(&mEyePos, eyePos);
-		XMStoreFloat3(&mEyeTarget, playerPos);
-		XMStoreFloat3(&mPlayerPos, playerPos);
-		XMStoreFloat3(&mPlayerTarget, playerTarget);
+		float betweenLength = distance(playerPos, obstacleVector);
+		if (plusRadius < betweenLength)
+		{
+			XMStoreFloat3(&mEyePos, eyePos);
+			XMStoreFloat3(&mEyeTarget, playerPos);
+			XMStoreFloat3(&mPlayerPos, playerPos);
+			XMStoreFloat3(&mPlayerTarget, playerTarget);
+		}
+		else if (plusRadius >= betweenLength)
+		{
+			playerPos = prePlayerPos;
+			playerTarget = prePlayerTarget;
+			eyePos = preEyePos;
+		}
 	}
 
 	if (GetAsyncKeyState('a') || GetAsyncKeyState('A'))
@@ -439,28 +486,52 @@ void ShapesApp::OnKeyboardInput(const GameTimer& gt)
 		mCamTheta = 0.0f;
 		mYaw -= 0.0001f;
 
-		XMVECTOR EyePos = XMVectorSet(sinf(mYaw + XM_PI), 1.0f, cosf(mYaw + XM_PI), 1.0f);
-		eyePos = XMVectorMultiplyAdd(EyePosCalc, EyePos, playerPos);
-		XMStoreFloat3(&mEyePos, eyePos);
+		XMVECTOR prePlayerPos = playerPos;
+		XMVECTOR preEyePos = eyePos;
+
+		XMVECTOR EyePosOne = XMVectorSet(sinf(mYaw + XM_PI), 1.0f, cosf(mYaw + XM_PI), 1.0f);
+		eyePos = XMVectorMultiplyAdd(EyePosCalc, EyePosOne, playerPos);
 
 		mPlayerTarget.x = mPlayerPos.x + mRadius * sinf(mCamPhi) * sinf(mYaw);
 		mPlayerTarget.z = mPlayerPos.z + mRadius * sinf(mCamPhi) * cosf(mYaw);
 
-		XMStoreFloat3(&mEyeTarget, playerPos);
+		float betweenLength = distance(playerPos, obstacleVector);
+		if (plusRadius < betweenLength)
+		{
+			XMStoreFloat3(&mEyePos, eyePos);
+			XMStoreFloat3(&mEyeTarget, playerPos);
+		}
+		else if (plusRadius >= betweenLength)
+		{
+			playerPos = prePlayerPos;
+			eyePos = preEyePos;
+		}
 	}
 	else if (GetAsyncKeyState('d') || GetAsyncKeyState('D'))
 	{
 		mCamTheta = 0.0f;
 		mYaw += 0.0001f;
 
-		XMVECTOR EyePos = XMVectorSet(sinf(mYaw + XM_PI), 1.0f, cosf(mYaw + XM_PI), 1.0f);
-		eyePos = XMVectorMultiplyAdd(EyePosCalc, EyePos, playerPos);
-		XMStoreFloat3(&mEyePos, eyePos);
+		XMVECTOR prePlayerPos = playerPos;
+		XMVECTOR preEyePos = eyePos;
+
+		XMVECTOR EyePosOne = XMVectorSet(sinf(mYaw + XM_PI), 1.0f, cosf(mYaw + XM_PI), 1.0f);
+		eyePos = XMVectorMultiplyAdd(EyePosCalc, EyePosOne, playerPos);
 
 		mPlayerTarget.x = mPlayerPos.x + mRadius * sinf(mCamPhi) * sinf(mYaw);
 		mPlayerTarget.z = mPlayerPos.z + mRadius * sinf(mCamPhi) * cosf(mYaw);
 
-		XMStoreFloat3(&mEyeTarget, playerPos);
+		float betweenLength = distance(playerPos, obstacleVector);
+		if (plusRadius < betweenLength)
+		{
+			XMStoreFloat3(&mEyePos, eyePos);
+			XMStoreFloat3(&mEyeTarget, playerPos);
+		}
+		else if (plusRadius >= betweenLength)
+		{
+			playerPos = prePlayerPos;
+			eyePos = preEyePos;
+		}
 	}
 }
 
@@ -497,6 +568,7 @@ void ShapesApp::UpdateObjectCBs(const GameTimer& gt)
 		if (e->ObjCBIndex == 0)
 		{
 			world = XMMatrixScaling(1.0f, 1.0f, 1.0f) * XMMatrixRotationRollPitchYaw(0.0f, mYaw + XM_PI, 0.0f) * XMMatrixTranslation(mPlayerPos.x, mPlayerPos.y, mPlayerPos.z);
+			e->originVector = mPlayerPos;
 		}
 		// Show the PlayerTarget Box
 		else if (e->ObjCBIndex == 1)
@@ -755,7 +827,6 @@ void ShapesApp::BuildShapeGeometry()
 	GeometryGenerator::MeshData box = geoGen.CreateBox(1.5f, 0.5f, 1.5f, 3);
 	GeometryGenerator::MeshData grid = geoGen.CreateGrid(20.0f, 30.0f, 60, 40);
 	GeometryGenerator::MeshData sphere = geoGen.CreateGeosphere(0.5f, 3);
-	//GeometryGenerator::MeshData sphere = geoGen.CreateSphere(0.5f, 20, 20);
 	GeometryGenerator::MeshData cylinder = geoGen.CreateCylinder(0.5f, 0.3f, 3.0f, 20, 20);
 
 	//
@@ -1127,8 +1198,7 @@ void ShapesApp::BuildRenderItems()
 	UINT objCBIndex = 0;
 
 	auto carRitem = std::make_unique<RenderItem>();
-	XMStoreFloat4x4(&carRitem->World, XMMatrixTranslation(-25.0f, 2.0f, 5.0f));
-	//carRitem->World = MathHelper::Identity4x4();
+	carRitem->World = MathHelper::Identity4x4();
 	carRitem->ObjCBIndex = objCBIndex++;
 	carRitem->Geo = mGeometries["carGeo"].get();
 	carRitem->Mat = mMaterials["carMat"].get();
@@ -1136,6 +1206,7 @@ void ShapesApp::BuildRenderItems()
 	carRitem->IndexCount = carRitem->Geo->DrawArgs["car"].IndexCount;
 	carRitem->StartIndexLocation = carRitem->Geo->DrawArgs["car"].StartIndexLocation;
 	carRitem->BaseVertexLocation = carRitem->Geo->DrawArgs["car"].BaseVertexLocation;
+	carRitem->radius = 5.0f;
 	mAllRitems.push_back(std::move(carRitem));
 
 	auto boxRitem = std::make_unique<RenderItem>();
@@ -1173,8 +1244,7 @@ void ShapesApp::BuildRenderItems()
 	mAllRitems.push_back(std::move(gridRitem));
 
 	auto skullRitem = std::make_unique<RenderItem>();
-	XMStoreFloat4x4(&skullRitem->World, XMMatrixTranslation(0.0f, 2.0f, 5.0f));
-	//skullRitem->World = MathHelper::Identity4x4();
+	XMStoreFloat4x4(&skullRitem->World, XMMatrixTranslation(0.0f, 2.0f, 15.0f));
 	skullRitem->ObjCBIndex = objCBIndex++;
 	skullRitem->Geo = mGeometries["skullGeo"].get();
 	skullRitem->Mat = mMaterials["skullMat"].get();
@@ -1182,6 +1252,8 @@ void ShapesApp::BuildRenderItems()
 	skullRitem->IndexCount = skullRitem->Geo->DrawArgs["skull"].IndexCount;
 	skullRitem->StartIndexLocation = skullRitem->Geo->DrawArgs["skull"].StartIndexLocation;
 	skullRitem->BaseVertexLocation = skullRitem->Geo->DrawArgs["skull"].BaseVertexLocation;
+	skullRitem->originVector = { 0.0f, 2.0f, 15.0f };
+	skullRitem->radius = 4.0f;
 	mAllRitems.push_back(std::move(skullRitem));
 
 	auto sphereRitem = std::make_unique<RenderItem>();
