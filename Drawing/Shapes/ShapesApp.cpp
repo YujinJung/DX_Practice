@@ -71,7 +71,8 @@ private:
 	virtual void OnMouseMove(WPARAM btnState, int x, int y)override;
 
 	void OnKeyboardInput(const GameTimer& gt);
-	XMVECTOR MatrixLEFTRIGHT(FXMVECTOR EyeDirection, FXMVECTOR up);
+
+	void UpdatePlayer(const GameTimer & gt);
 	void UpdateCamera(const GameTimer& gt);
 	void UpdateObjectCBs(const GameTimer& gt);
 	void UpdateMainPassCB(const GameTimer& gt);
@@ -122,17 +123,19 @@ private:
 	bool mIsWireframe = false;
 
 	/*
-	 * EyePos - EyeTarget
-	 * player - playerTarget
-	 * a d - playerTarget Move(Yaw)
-	 * w s - playerTarget, EyePos Move // EyeDirection based on playerTarget
-	 * mouse left click - EyeTarget Move
-	 * mouse right click - EyeTarget, playerTarget(x, z)(Yaw) Move
+	* EyePos - EyeTarget
+	* player - playerTarget
+	* a d - playerTarget Move(Yaw)
+	* w s - playerTarget, EyePos Move // EyeDirection based on playerTarget
+	* mouse left click - EyeTarget Move
+	* mouse right click - EyeTarget, playerTarget(x, z)(Yaw) Move
 	*/
 	float mRadius = 15.0f;
 	float mYaw = 0.0f;
 	float mCamPhi = XM_PIDIV2;
 	float mCamTheta;
+
+	float mCarVelocity = 0.0f;
 
 	XMFLOAT3 mPlayerPos = { 0.0f, 3.0f, 0.0f };
 	XMFLOAT3 mEyePos = { 0.0f, 30.0f, -30.0f };
@@ -140,7 +143,7 @@ private:
 	XMFLOAT3 mEyeTarget = mPlayerPos;
 	XMFLOAT4X4 mView = MathHelper::Identity4x4();
 	XMFLOAT4X4 mProj = MathHelper::Identity4x4();
-	XMFLOAT3 mEyePosCalc = { mRadius * 2 * sinf(XM_PIDIV4), mRadius * 2 * cosf(XM_PIDIV4), mRadius * 2 * sinf(XM_PIDIV4) };
+	XMFLOAT3 mEyePosCalc = { mRadius * 2 * sinf(XM_PI / 3.0f), mRadius * 2 * cosf(XM_PI / 3.0f), mRadius * 2 * sinf(XM_PI / 3.0f) };
 
 	POINT mLastMousePos;
 };
@@ -228,6 +231,7 @@ void ShapesApp::OnResize()
 void ShapesApp::Update(const GameTimer& gt)
 {
 	OnKeyboardInput(gt);
+	UpdatePlayer(gt);
 	UpdateCamera(gt);
 
 	// Cycle through the circular frame resource array.
@@ -352,9 +356,9 @@ void ShapesApp::OnMouseMove(WPARAM btnState, int x, int y)
 		mCamPhi += dy;
 		mCamPhi = MathHelper::Clamp(mCamPhi, 0.1f, MathHelper::Pi - 0.1f);
 
-		mEyeTarget.x = mEyePos.x + mRadius * sinf(mCamPhi) * sinf(mYaw + mCamTheta);
-		mEyeTarget.z = mEyePos.z + mRadius * sinf(mCamPhi) * cosf(mYaw + mCamTheta);
-		mEyeTarget.y = mEyePos.y + mRadius * cosf(mCamPhi);
+		mEyeTarget.x = mEyePos.x + 2 * mRadius * sinf(mCamPhi) * sinf(mYaw + mCamTheta);
+		mEyeTarget.z = mEyePos.z + 2 * mRadius * sinf(mCamPhi) * cosf(mYaw + mCamTheta);
+		mEyeTarget.y = mEyePos.y + 2 * mRadius * cosf(mCamPhi);
 	}
 	else if ((btnState & MK_RBUTTON) != 0)
 	{
@@ -370,23 +374,16 @@ void ShapesApp::OnMouseMove(WPARAM btnState, int x, int y)
 		mCamPhi += dy;
 		mCamPhi = MathHelper::Clamp(mCamPhi, 0.1f, MathHelper::Pi - 0.1f);
 
-		if (mYaw > XM_2PI)
-			mYaw -= XM_2PI;
-		else if (mYaw < 0.0f)
-			mYaw += XM_2PI;
-
 		XMVECTOR EyePos = XMVectorSet(sinf(mYaw + XM_PI), 1.0f, cosf(mYaw + XM_PI), 1.0f);
 		eyePos = XMVectorMultiplyAdd(EyePosCalc, EyePos, playerPos);
 		XMStoreFloat3(&mEyePos, eyePos);
 
-		mEyeTarget.x = mEyePos.x + mRadius * sinf(mCamPhi) * sinf(mYaw);
-		mEyeTarget.z = mEyePos.z + mRadius * sinf(mCamPhi) * cosf(mYaw);
-		mEyeTarget.y = mEyePos.y + mRadius * cosf(mCamPhi);
+		mEyeTarget.x = mEyePos.x + 2 * mRadius * sinf(mCamPhi) * sinf(mYaw);
+		mEyeTarget.z = mEyePos.z + 2 * mRadius * sinf(mCamPhi) * cosf(mYaw);
+		mEyeTarget.y = mEyePos.y + 2 * mRadius * cosf(mCamPhi);
 
 		mPlayerTarget.x = mPlayerPos.x + mRadius * sinf(mCamPhi) * sinf(mYaw);
 		mPlayerTarget.z = mPlayerPos.z + mRadius * sinf(mCamPhi) * cosf(mYaw);
-
-		XMStoreFloat3(&mEyeTarget, playerPos);
 	}
 	mLastMousePos.x = x;
 	mLastMousePos.y = y;
@@ -402,6 +399,7 @@ float distance(const FXMVECTOR& v1, const FXMVECTOR& v2)
 	return distance;
 }
 
+
 //-------------------------------------------------------------------------------------------------------------------------------
 void ShapesApp::OnKeyboardInput(const GameTimer& gt)
 {
@@ -410,137 +408,91 @@ void ShapesApp::OnKeyboardInput(const GameTimer& gt)
 	else
 		mIsWireframe = false;
 
-	// Build the view matrix.
+	mCamTheta = 0.0f;
+
+	if (GetAsyncKeyState('w') || GetAsyncKeyState('W'))
+	{
+		if (mCarVelocity < 0.08f)
+			mCarVelocity += 0.0001f;
+
+		/*float betweenLength = distance(playerPos, obstacleVector);
+		if (plusRadius < betweenLength)
+		{
+		XMStoreFloat3(&mEyePos, eyePos);
+		XMStoreFloat3(&mEyeTarget, playerPos);
+		XMStoreFloat3(&mPlayerPos, playerPos);
+		XMStoreFloat3(&mPlayerTarget, playerTarget);
+		}
+		else if (plusRadius >= betweenLength)
+		{
+		playerPos = prePlayerPos;
+		playerTarget = prePlayerTarget;
+		eyePos = preEyePos;
+		}*/
+	}
+	else if (GetAsyncKeyState('s') || GetAsyncKeyState('S'))
+	{
+		if (mCarVelocity > -0.08f)
+			mCarVelocity -= 0.0001f;
+
+		/*float betweenLength = distance(playerPos, obstacleVector);
+		if (plusRadius < betweenLength)
+		{
+		XMStoreFloat3(&mEyePos, eyePos);
+		XMStoreFloat3(&mEyeTarget, playerPos);
+		XMStoreFloat3(&mPlayerPos, playerPos);
+		XMStoreFloat3(&mPlayerTarget, playerTarget);
+		}
+		else if (plusRadius >= betweenLength)
+		{
+		playerPos = prePlayerPos;
+		playerTarget = prePlayerTarget;
+		eyePos = preEyePos;
+		}*/
+	}
+	else
+	{
+		if (mCarVelocity > 0.0f)
+			mCarVelocity -= 0.0001f;
+		if (mCarVelocity < 0.0f)
+			mCarVelocity += 0.0001f;
+	}
+
+	if (GetAsyncKeyState('a') || GetAsyncKeyState('A'))
+	{
+		mYaw -= 0.001f;
+
+
+		mPlayerTarget.x = mPlayerPos.x + mRadius * sinf(mCamPhi) * sinf(mYaw);
+		mPlayerTarget.z = mPlayerPos.z + mRadius * sinf(mCamPhi) * cosf(mYaw);
+	}
+	else if (GetAsyncKeyState('d') || GetAsyncKeyState('D'))
+	{
+		mYaw += 0.001f;
+
+		mPlayerTarget.x = mPlayerPos.x + mRadius * sinf(mCamPhi) * sinf(mYaw);
+		mPlayerTarget.z = mPlayerPos.z + mRadius * sinf(mCamPhi) * cosf(mYaw);
+	}
+}
+
+void ShapesApp::UpdatePlayer(const GameTimer& gt)
+{
 	XMVECTOR eyePos = XMVectorSet(mEyePos.x, mEyePos.y, mEyePos.z, 1.0f);
 	XMVECTOR playerPos = XMVectorSet(mPlayerPos.x, mPlayerPos.y, mPlayerPos.z, 1.0f);
 	XMVECTOR playerTarget = XMVectorSet(mPlayerTarget.x, mPlayerTarget.y, mPlayerTarget.z, 0.0f);
 	XMVECTOR EyePosCalc = XMVectorSet(mEyePosCalc.x, mEyePosCalc.y, mEyePosCalc.z, 1.0f);
 	XMVECTOR PlayerDirection = XMVector3Normalize(XMVectorSubtract(playerTarget, playerPos));
 
-	XMFLOAT3& obstaclePos = mAllRitems[4]->originVector;
-	XMVECTOR obstacleVector = XMVectorSet(obstaclePos.x, obstaclePos.y, obstaclePos.z, 1.0f);
-	float plusRadius = mAllRitems[0]->radius + mAllRitems[4]->radius;
-	float betweenLength = 0.0f;
+	playerPos = XMVectorAdd(playerPos, mCarVelocity*PlayerDirection);
+	playerTarget = XMVectorAdd(playerTarget, mCarVelocity*PlayerDirection);
 
-	if (GetAsyncKeyState('w') || GetAsyncKeyState('W'))
-	{
-		mCamTheta = 0.0f;
+	XMVECTOR EyePosOne = XMVectorSet(sinf(mYaw + XM_PI), 1.0f, cosf(mYaw + XM_PI), 1.0f);
+	eyePos = XMVectorMultiplyAdd(EyePosCalc, EyePosOne, playerPos);
 
-		XMVECTOR prePlayerPos = playerPos;
-		XMVECTOR prePlayerTarget = playerTarget;
-		XMVECTOR preEyePos = eyePos;
-
-		playerPos = XMVectorAdd(playerPos, 0.001*PlayerDirection);
-		playerTarget = XMVectorAdd(playerTarget, 0.001*PlayerDirection);
-
-		XMVECTOR EyePosOne = XMVectorSet(sinf(mYaw + XM_PI), 1.0f, cosf(mYaw + XM_PI), 1.0f);
-		eyePos = XMVectorMultiplyAdd(EyePosCalc, EyePosOne, playerPos);
-
-		float betweenLength = distance(playerPos, obstacleVector);
-		if (plusRadius < betweenLength)
-		{
-			XMStoreFloat3(&mEyePos, eyePos);
-			XMStoreFloat3(&mEyeTarget, playerPos);
-			XMStoreFloat3(&mPlayerPos, playerPos);
-			XMStoreFloat3(&mPlayerTarget, playerTarget);
-		}
-		else if (plusRadius >= betweenLength)
-		{
-			playerPos = prePlayerPos;
-			playerTarget = prePlayerTarget;
-			eyePos = preEyePos;
-		}
-	}
-	else if (GetAsyncKeyState('s') || GetAsyncKeyState('S'))
-	{
-		mCamTheta = 0.0f;
-
-		XMVECTOR prePlayerPos = playerPos;
-		XMVECTOR prePlayerTarget = playerTarget;
-		XMVECTOR preEyePos = eyePos;
-
-		playerPos = XMVectorSubtract(playerPos, 0.001*PlayerDirection);
-		playerTarget = XMVectorSubtract(playerTarget, 0.001*PlayerDirection);
-
-		XMVECTOR EyePosOne = XMVectorSet(sinf(mYaw + XM_PI), 1.0f, cosf(mYaw + XM_PI), 1.0f);
-		eyePos = XMVectorMultiplyAdd(EyePosCalc, EyePosOne, playerPos);
-
-		float betweenLength = distance(playerPos, obstacleVector);
-		if (plusRadius < betweenLength)
-		{
-			XMStoreFloat3(&mEyePos, eyePos);
-			XMStoreFloat3(&mEyeTarget, playerPos);
-			XMStoreFloat3(&mPlayerPos, playerPos);
-			XMStoreFloat3(&mPlayerTarget, playerTarget);
-		}
-		else if (plusRadius >= betweenLength)
-		{
-			playerPos = prePlayerPos;
-			playerTarget = prePlayerTarget;
-			eyePos = preEyePos;
-		}
-	}
-
-	if (GetAsyncKeyState('a') || GetAsyncKeyState('A'))
-	{
-		mCamTheta = 0.0f;
-		mYaw -= 0.0001f;
-
-		XMVECTOR prePlayerPos = playerPos;
-		XMVECTOR preEyePos = eyePos;
-
-		XMVECTOR EyePosOne = XMVectorSet(sinf(mYaw + XM_PI), 1.0f, cosf(mYaw + XM_PI), 1.0f);
-		eyePos = XMVectorMultiplyAdd(EyePosCalc, EyePosOne, playerPos);
-
-		mPlayerTarget.x = mPlayerPos.x + mRadius * sinf(mCamPhi) * sinf(mYaw);
-		mPlayerTarget.z = mPlayerPos.z + mRadius * sinf(mCamPhi) * cosf(mYaw);
-
-		float betweenLength = distance(playerPos, obstacleVector);
-		if (plusRadius < betweenLength)
-		{
-			XMStoreFloat3(&mEyePos, eyePos);
-			XMStoreFloat3(&mEyeTarget, playerPos);
-		}
-		else if (plusRadius >= betweenLength)
-		{
-			playerPos = prePlayerPos;
-			eyePos = preEyePos;
-		}
-	}
-	else if (GetAsyncKeyState('d') || GetAsyncKeyState('D'))
-	{
-		mCamTheta = 0.0f;
-		mYaw += 0.0001f;
-
-		XMVECTOR prePlayerPos = playerPos;
-		XMVECTOR preEyePos = eyePos;
-
-		XMVECTOR EyePosOne = XMVectorSet(sinf(mYaw + XM_PI), 1.0f, cosf(mYaw + XM_PI), 1.0f);
-		eyePos = XMVectorMultiplyAdd(EyePosCalc, EyePosOne, playerPos);
-
-		mPlayerTarget.x = mPlayerPos.x + mRadius * sinf(mCamPhi) * sinf(mYaw);
-		mPlayerTarget.z = mPlayerPos.z + mRadius * sinf(mCamPhi) * cosf(mYaw);
-
-		float betweenLength = distance(playerPos, obstacleVector);
-		if (plusRadius < betweenLength)
-		{
-			XMStoreFloat3(&mEyePos, eyePos);
-			XMStoreFloat3(&mEyeTarget, playerPos);
-		}
-		else if (plusRadius >= betweenLength)
-		{
-			playerPos = prePlayerPos;
-			eyePos = preEyePos;
-		}
-	}
-}
-
-XMVECTOR ShapesApp::MatrixLEFTRIGHT(FXMVECTOR EyeDirection, FXMVECTOR up)
-{
-	XMVECTOR R0 = XMVector3Cross(up, EyeDirection);
-	R0 = XMVector3Normalize(R0);
-
-	return R0;
+	XMStoreFloat3(&mEyePos, eyePos);
+	XMStoreFloat3(&mEyeTarget, playerPos);
+	XMStoreFloat3(&mPlayerPos, playerPos);
+	XMStoreFloat3(&mPlayerTarget, playerTarget);
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------
@@ -565,17 +517,13 @@ void ShapesApp::UpdateObjectCBs(const GameTimer& gt)
 	for (auto& e : mAllRitems)
 	{
 		XMMATRIX world = XMLoadFloat4x4(&e->World);
+		static float index = 0.0f;
+
 		if (e->ObjCBIndex == 0)
 		{
 			world = XMMatrixScaling(1.0f, 1.0f, 1.0f) * XMMatrixRotationRollPitchYaw(0.0f, mYaw + XM_PI, 0.0f) * XMMatrixTranslation(mPlayerPos.x, mPlayerPos.y, mPlayerPos.z);
 			e->originVector = mPlayerPos;
 		}
-		// Show the PlayerTarget Box
-		else if (e->ObjCBIndex == 1)
-			world = XMMatrixTranslation(mPlayerTarget.x, mPlayerTarget.y, mPlayerTarget.z);
-		// Show the EyeTarget Box
-		else if (e->ObjCBIndex == 2)
-			world = XMMatrixTranslation(mEyeTarget.x, mEyeTarget.y, mEyeTarget.z);
 
 		ObjectConstants objConstants;
 		XMStoreFloat4x4(&objConstants.World, XMMatrixTranspose(world));
@@ -815,8 +763,8 @@ void ShapesApp::BuildShadersAndInputLayout()
 	mInputLayout =
 	{
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		{"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 28, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+	{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+	{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 28, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 	};
 }
 
@@ -1206,34 +1154,11 @@ void ShapesApp::BuildRenderItems()
 	carRitem->IndexCount = carRitem->Geo->DrawArgs["car"].IndexCount;
 	carRitem->StartIndexLocation = carRitem->Geo->DrawArgs["car"].StartIndexLocation;
 	carRitem->BaseVertexLocation = carRitem->Geo->DrawArgs["car"].BaseVertexLocation;
-	carRitem->radius = 5.0f;
+	carRitem->radius = 2.0f;
 	mAllRitems.push_back(std::move(carRitem));
 
-	auto boxRitem = std::make_unique<RenderItem>();
-	XMStoreFloat4x4(&boxRitem->World, XMMatrixScaling(2.0f, 2.0f, 2.0f)*XMMatrixTranslation(0.0f, 6.0f, -3.0f));
-	boxRitem->ObjCBIndex = objCBIndex++;
-	boxRitem->Geo = mGeometries["shapeGeo"].get();
-	boxRitem->Mat = mMaterials["stone0"].get();
-	boxRitem->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-	boxRitem->IndexCount = boxRitem->Geo->DrawArgs["box"].IndexCount;
-	boxRitem->StartIndexLocation = boxRitem->Geo->DrawArgs["box"].StartIndexLocation;
-	boxRitem->BaseVertexLocation = boxRitem->Geo->DrawArgs["box"].BaseVertexLocation;
-	mAllRitems.push_back(std::move(boxRitem));
-
-	auto boxRitem2 = std::make_unique<RenderItem>();
-	XMStoreFloat4x4(&boxRitem2->World, XMMatrixScaling(1.0f, 2.0f, 1.0f)*XMMatrixTranslation(0.0f, 6.0f, -3.0f));
-	boxRitem2->ObjCBIndex = objCBIndex++;
-	boxRitem2->Geo = mGeometries["shapeGeo"].get();
-	boxRitem2->Mat = mMaterials["stone0"].get();
-	boxRitem2->Mat->DiffuseAlbedo = XMFLOAT4(Colors::Red);
-	boxRitem2->PrimitiveType = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-	boxRitem2->IndexCount = boxRitem2->Geo->DrawArgs["box"].IndexCount;
-	boxRitem2->StartIndexLocation = boxRitem2->Geo->DrawArgs["box"].StartIndexLocation;
-	boxRitem2->BaseVertexLocation = boxRitem2->Geo->DrawArgs["box"].BaseVertexLocation;
-	mAllRitems.push_back(std::move(boxRitem2));
-
 	auto gridRitem = std::make_unique<RenderItem>();
-	XMStoreFloat4x4(&gridRitem->World, XMMatrixScaling(10.0f, 10.0f, 10.0f));
+	XMStoreFloat4x4(&gridRitem->World, XMMatrixScaling(10.0f, 10.0f, 100.0f));
 	gridRitem->ObjCBIndex = objCBIndex++;
 	gridRitem->Geo = mGeometries["shapeGeo"].get();
 	gridRitem->Mat = mMaterials["tile0"].get();
@@ -1253,7 +1178,7 @@ void ShapesApp::BuildRenderItems()
 	skullRitem->StartIndexLocation = skullRitem->Geo->DrawArgs["skull"].StartIndexLocation;
 	skullRitem->BaseVertexLocation = skullRitem->Geo->DrawArgs["skull"].BaseVertexLocation;
 	skullRitem->originVector = { 0.0f, 2.0f, 15.0f };
-	skullRitem->radius = 4.0f;
+	skullRitem->radius = 1.0f;
 	mAllRitems.push_back(std::move(skullRitem));
 
 	auto sphereRitem = std::make_unique<RenderItem>();
@@ -1267,7 +1192,7 @@ void ShapesApp::BuildRenderItems()
 	sphereRitem->BaseVertexLocation = sphereRitem->Geo->DrawArgs["sphere"].BaseVertexLocation;
 	mAllRitems.push_back(std::move(sphereRitem));
 
-	for (int i = 0; i < 5; ++i)
+	for (int i = 0; i < 225; ++i)
 	{
 		// 기둥들과 구들을 두 줄로 배치
 		auto leftCylRitem = std::make_unique<RenderItem>();
@@ -1275,11 +1200,11 @@ void ShapesApp::BuildRenderItems()
 		auto leftSphereRitem = std::make_unique<RenderItem>();
 		auto rightSphereRitem = std::make_unique<RenderItem>();
 
-		XMMATRIX leftCylWorld = XMMatrixTranslation(-5.0f, 1.5f, -10.0f + i * 5.0f);
-		XMMATRIX rightCylWorld = XMMatrixTranslation(+5.0f, 1.5f, -10.0f + i * 5.0f);
+		XMMATRIX leftCylWorld = XMMatrixTranslation(-10.0f, 1.5f, -10.0f + i * 5.0f);
+		XMMATRIX rightCylWorld = XMMatrixTranslation(+10.0f, 1.5f, -10.0f + i * 5.0f);
 
-		XMMATRIX leftSphereWorld = XMMatrixTranslation(-5.0f, 3.5f, -10.0f + i * 5.0f);
-		XMMATRIX rightSphereWorld = XMMatrixTranslation(+5.0f, 3.5f, -10.0f + i * 5.0f);
+		XMMATRIX leftSphereWorld = XMMatrixTranslation(-10.0f, 3.5f, -10.0f + i * 5.0f);
+		XMMATRIX rightSphereWorld = XMMatrixTranslation(+10.0f, 3.5f, -10.0f + i * 5.0f);
 
 		XMStoreFloat4x4(&leftCylRitem->World, rightCylWorld);
 		leftCylRitem->ObjCBIndex = objCBIndex++;
