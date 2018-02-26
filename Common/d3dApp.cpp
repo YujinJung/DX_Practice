@@ -663,7 +663,7 @@ void D3DApp::LogAdapterOutputs(IDXGIAdapter* adapter)
         text += desc.DeviceName;
         text += L"\n";
         OutputDebugString(text.c_str());
-
+		
         LogOutputDisplayModes(output, mBackBufferFormat);
 
         ReleaseCom(output);
