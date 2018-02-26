@@ -86,8 +86,8 @@ private:
 	void BuildRootSignature();
 	void BuildShadersAndInputLayout();
 	void BuildShapeGeometry();
-	/*void BuildSkull();
-	void BuildCar();*/
+	void BuildSkull();
+	void BuildCar();
 	void BuildMaterials();
 	void BuildPSOs();
 	void BuildFrameResources();
@@ -422,27 +422,25 @@ void ShapesApp::OnKeyboardInput(const GameTimer& gt)
 
 	if (GetAsyncKeyState('w') || GetAsyncKeyState('W'))
 	{
-		if (mCarVelocity < 0.05f)
-			mCarVelocity += 0.00001f;
-
+		if (mCarVelocity < 0.01f)
+			mCarVelocity += 0.000001f;
 	}
 	else if (GetAsyncKeyState('s') || GetAsyncKeyState('S'))
 	{
-		if (mCarVelocity > -0.05f)
-			mCarVelocity -= 0.00001f;
-		 
+		if (mCarVelocity > -0.01f)
+			mCarVelocity -= 0.000001f;
 	}
 	else
 	{
 		if (mCarVelocity > 0.0f)
-			mCarVelocity -= 0.00001f;
+			mCarVelocity -= 0.000001f;
 		if (mCarVelocity < 0.0f)
-			mCarVelocity += 0.00001f;
+			mCarVelocity += 0.000001f;
 	}
 
 	if (GetAsyncKeyState('a') || GetAsyncKeyState('A'))
 	{
-		mYaw -= 0.002f;
+		mYaw -= 0.0001f;
 
 
 		mPlayerTarget.x = mPlayerPos.x + mRadius * sinf(mCamPhi) * sinf(mYaw);
@@ -450,7 +448,7 @@ void ShapesApp::OnKeyboardInput(const GameTimer& gt)
 	}
 	else if (GetAsyncKeyState('d') || GetAsyncKeyState('D'))
 	{
-		mYaw += 0.002f;
+		mYaw += 0.0001f;
 
 		mPlayerTarget.x = mPlayerPos.x + mRadius * sinf(mCamPhi) * sinf(mYaw);
 		mPlayerTarget.z = mPlayerPos.z + mRadius * sinf(mCamPhi) * cosf(mYaw);
@@ -507,14 +505,35 @@ void ShapesApp::UpdateObjectCBs(const GameTimer& gt)
 
 		if (e->ObjCBIndex == 1)
 		{
-			world = XMMatrixScaling(4.0f, 4.0f, 4.0f) * XMMatrixRotationRollPitchYaw(0.0f, mYaw + XM_PI, 0.0f) * XMMatrixTranslation(mPlayerPos.x, mPlayerPos.y, mPlayerPos.z);
+			static float dx = 0.0f, dz = 0.0f;
+
+			XMFLOAT2 PlayerDirection(mPlayerTarget.x - mPlayerPos.x, mPlayerTarget.z - mPlayerPos.z);
+			if (PlayerDirection.x < 0.0f)
+				PlayerDirection.x *= -1.0f;
+			if (PlayerDirection.y < 0.0f)
+				PlayerDirection.y *= -1.0f;
+
+			dx += mCarVelocity * PlayerDirection.x * 0.01f;
+			dz += mCarVelocity * PlayerDirection.y * 0.01f;
+
+			if (dx > XM_2PI)
+				dx -= XM_2PI;
+			else if (dx < -XM_2PI)
+				dx += XM_2PI;
+
+			if (dz > XM_2PI)
+				dz -= XM_2PI;
+			else if (dz < -XM_2PI)
+				dz += XM_2PI;
+
+			world = XMMatrixScaling(4.0f, 4.0f, 4.0f) * XMMatrixRotationRollPitchYaw(-1.0f* dz, mYaw + XM_PI, dx) * XMMatrixTranslation(mPlayerPos.x, mPlayerPos.y, mPlayerPos.z);
 			e->originVector = mPlayerPos;
 		}
 
-		/*if (attackMonster && e->ObjCBIndex == 2)
+		if (attackMonster && e->ObjCBIndex == 2)
 		{
-			world = XMMatrixScaling(2.0f, 2.0f, 2.0f) * XMMatrixTranslation(0.0f, 2.0f, 15.0f);
-		}*/
+			world = XMMatrixScaling(2.0f, 2.0f, 2.0f)* XMMatrixRotationRollPitchYaw(0.0f, mYaw + XM_PI, 0.0f) * XMMatrixTranslation(0.0f, 2.0f, 15.0f);
+		}
 
 		ObjectConstants objConstants;
 		XMStoreFloat4x4(&objConstants.World, XMMatrixTranspose(world));
@@ -773,7 +792,6 @@ void ShapesApp::BuildConstantBufferViews()
 	}
 }
 
-// ��� ���ϱ����� �ϳ��� ver
 //-------------------------------------------------------------------------------------------------------------------------------
 void ShapesApp::BuildRootSignature()
 {
@@ -965,7 +983,6 @@ void ShapesApp::BuildShapeGeometry()
 	mGeometries[geo->Name] = std::move(geo);
 }
 
-/*
 void ShapesApp::BuildCar()
 {
 	std::ifstream carText("Model/car.txt");
@@ -1097,7 +1114,7 @@ void ShapesApp::BuildSkull()
 	geo->DrawArgs["skull"] = skullSubmesh;
 
 	mGeometries[geo->Name] = std::move(geo);
-}*/
+}
 
 void ShapesApp::BuildMaterials()
 {
@@ -1232,8 +1249,8 @@ void ShapesApp::BuildRenderItems()
 	mAllRitems.push_back(std::move(carRitem));*/
 
 	auto gridRitem = std::make_unique<RenderItem>();
-	gridRitem->World = MathHelper::Identity4x4();
-	XMStoreFloat4x4(&gridRitem->TexTransform, XMMatrixScaling(8.0f, 8.0f, 1.0f));
+	XMStoreFloat4x4(&gridRitem->World, XMMatrixScaling(2.0f, 1.0f, 10.0f));
+	XMStoreFloat4x4(&gridRitem->TexTransform, XMMatrixScaling(8.0f, 80.0f, 1.0f));
 	gridRitem->ObjCBIndex = objCBIndex++;
 	gridRitem->Mat = mMaterials["grass0"].get();
 	gridRitem->Geo = mGeometries["shapeGeo"].get();
@@ -1260,7 +1277,7 @@ void ShapesApp::BuildRenderItems()
 	XMStoreFloat4x4(&sphereRitem->World, XMMatrixScaling(4.0f, 4.0f, 4.0f)*XMMatrixTranslation(0.0f, 2.0f, 0.0f));
 	XMStoreFloat4x4(&sphereRitem->TexTransform, XMMatrixScaling(1.0f, 1.0f, 1.0f));
 	sphereRitem->ObjCBIndex = objCBIndex++;
-	sphereRitem->Mat = mMaterials["tile0"].get();
+	sphereRitem->Mat = mMaterials["stone0"].get();
 	sphereRitem->Geo = mGeometries["shapeGeo"].get();
 	sphereRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 	sphereRitem->IndexCount = sphereRitem->Geo->DrawArgs["sphere"].IndexCount;
