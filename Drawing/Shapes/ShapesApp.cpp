@@ -612,13 +612,6 @@ void ShapesApp::LoadTextures()
 		mCommandList.Get(), stoneTex->Filename.c_str(),
 		stoneTex->Resource, stoneTex->UploadHeap));
 
-	auto tileTex = std::make_unique<Texture>();
-	tileTex->Name = "tileTex";
-	tileTex->Filename = L"../../Textures/tile.dds";
-	ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(),
-		mCommandList.Get(), tileTex->Filename.c_str(),
-		tileTex->Resource, tileTex->UploadHeap));
-
 	auto grassTex = std::make_unique<Texture>();
 	grassTex->Name = "grassTex";
 	grassTex->Filename = L"../../Textures/grass.dds";
@@ -626,10 +619,18 @@ void ShapesApp::LoadTextures()
 		mCommandList.Get(), grassTex->Filename.c_str(),
 		grassTex->Resource, grassTex->UploadHeap));
 
+
+	auto tileTex = std::make_unique<Texture>();
+	tileTex->Name = "tileTex";
+	tileTex->Filename = L"../../Textures/tile.dds";
+	ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(),
+		mCommandList.Get(), tileTex->Filename.c_str(),
+		tileTex->Resource, tileTex->UploadHeap));
+
 	mTextures[bricksTex->Name] = std::move(bricksTex);
 	mTextures[stoneTex->Name] = std::move(stoneTex);
-	mTextures[tileTex->Name] = std::move(tileTex);
 	mTextures[grassTex->Name] = std::move(grassTex);
+	mTextures[tileTex->Name] = std::move(tileTex);
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------
@@ -685,6 +686,12 @@ void ShapesApp::BuildDescriptorHeaps()
 	srvDesc.Format = tileTex->GetDesc().Format;
 	srvDesc.Texture2D.MipLevels = tileTex->GetDesc().MipLevels;
 	md3dDevice->CreateShaderResourceView(tileTex.Get(), &srvDesc, hDescriptor);
+
+	hDescriptor.Offset(1, mCbvSrvDescriptorSize);
+
+	srvDesc.Format = grassTex->GetDesc().Format;
+	srvDesc.Texture2D.MipLevels = grassTex->GetDesc().MipLevels;
+	md3dDevice->CreateShaderResourceView(grassTex.Get(), &srvDesc, hDescriptor);
 }
 
 //-------------------------------------------------------------------------------------------------------------------------------
@@ -1228,7 +1235,7 @@ void ShapesApp::BuildRenderItems()
 	gridRitem->World = MathHelper::Identity4x4();
 	XMStoreFloat4x4(&gridRitem->TexTransform, XMMatrixScaling(8.0f, 8.0f, 1.0f));
 	gridRitem->ObjCBIndex = objCBIndex++;
-	gridRitem->Mat = mMaterials["tile0"].get();
+	gridRitem->Mat = mMaterials["grass0"].get();
 	gridRitem->Geo = mGeometries["shapeGeo"].get();
 	gridRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 	gridRitem->IndexCount = gridRitem->Geo->DrawArgs["grid"].IndexCount;
@@ -1253,8 +1260,8 @@ void ShapesApp::BuildRenderItems()
 	XMStoreFloat4x4(&sphereRitem->World, XMMatrixScaling(4.0f, 4.0f, 4.0f)*XMMatrixTranslation(0.0f, 2.0f, 0.0f));
 	XMStoreFloat4x4(&sphereRitem->TexTransform, XMMatrixScaling(1.0f, 1.0f, 1.0f));
 	sphereRitem->ObjCBIndex = objCBIndex++;
+	sphereRitem->Mat = mMaterials["tile0"].get();
 	sphereRitem->Geo = mGeometries["shapeGeo"].get();
-	sphereRitem->Mat = mMaterials["stone0"].get();
 	sphereRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 	sphereRitem->IndexCount = sphereRitem->Geo->DrawArgs["sphere"].IndexCount;
 	sphereRitem->StartIndexLocation = sphereRitem->Geo->DrawArgs["sphere"].StartIndexLocation;
